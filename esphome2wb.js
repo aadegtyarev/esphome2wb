@@ -122,28 +122,28 @@ converterDevice.init();
 /** Converter */
 /** --------- */
 
-trackMqtt(mqttDevice.baseTopic + "/+/+/+/state", function (msg) { 
+trackMqtt(mqttDevice.baseTopic + "/+/+/+/state", function (msg) {
     var espTopic = msg.topic
     var entityType = mqttDevice.getEntityType(espTopic)
 
-    if (!mqttDevice.isIgnoredTopic(entityType)){
+    if (!mqttDevice.isIgnoredTopic(entityType)) {
         espTopic = espTopic.substring(0, espTopic.length - 6)
         var control = genControlObj(espTopic)
 
         createVirtualDevice(control["device"])
         createControl(control)
-        
+
         //var control = session.getControl(msg.topic, "state_topic")
         var newValue = convertValue(control["converter_type"], msg.value)
 
-        writeWbControlValue(control["device"], control["name"], newValue)    
+        writeWbControlValue(control["device"], control["name"], newValue)
     }
 });
 
 function genControlObj(espTopic) {
     var entityType = mqttDevice.getEntityType(espTopic)
     var controlType = getControlType(entityType)
-    var deviceName = mqttDevice.getDeviceName(espTopic)    
+    var deviceName = mqttDevice.getDeviceName(espTopic)
     var topicName = mqttDevice.getTopicName(espTopic)
 
     return {
@@ -247,7 +247,7 @@ function createControl(control) {
             publishValue("{}/meta/order".format(topic), meta["order"])
         }
 
-        if (!control["readonly"]) addAction(control)        
+        if (!control["readonly"]) addAction(control)
     }
 }
 
