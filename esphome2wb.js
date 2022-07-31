@@ -170,17 +170,6 @@ function getControlType(entityType) {
     return (result != undefined) ? result : "text"
 }
 
-function parseHaConfig(haConfigJson) {
-    var obj = JSON.parse(haConfigJson)
-
-    return obj
-}
-
-
-function isShortNotation(haConfigObj) {
-    return haConfigObj["uniq_id"] != undefined
-}
-
 function addAction(control) {
     var wbControl = "/devices/{}/controls/{}/on".format(
         control["device"],
