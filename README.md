@@ -14,8 +14,17 @@
 
 Добавьте в файл конфигурации прошивки строки:
 ```yaml
+substitutions:
   name: "my_device"
-  prefix: "esphome/${name}"
+  prefix: "esphome/${name}" 
+  
+esphome:
+  name: ${name}
+  platform: ESP8266
+  board: your-board
+##
+# Настройки Wi-Fi и других сервисов
+##
 
 # Настройки подключения к MQTT-брокеру
 mqtt:
