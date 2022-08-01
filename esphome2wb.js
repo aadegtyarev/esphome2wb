@@ -311,7 +311,7 @@ function convertValue(converterType, value) {
     switch (converterType) {
         case "ON_OFF":
             if (isNumber(value)) {
-                return 1 ? "ON" : "OFF";
+                return value == 1 ? "ON" : "OFF";
             }
             else {
                 return value == "OFF" ? false : true;
