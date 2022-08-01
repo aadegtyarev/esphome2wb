@@ -4,7 +4,7 @@
 
 mqttDevice = {      //     
     baseTopic: "esphome",
-    allowWriteTopics: ["switch", "light"],
+    allowWriteTopics: ["switch"],
     ignoredTopics: ["debug"],
     entityTypes: [
         { esp: "switch", wb: "switch", converter: "ON_OFF" },
@@ -128,7 +128,7 @@ trackMqtt(mqttDevice.baseTopic + "/+/+/+/state", function (msg) {
 
     if (!mqttDevice.isIgnoredTopic(entityType)) {
         espTopic = espTopic.substring(0, espTopic.length - 6)
-        var control = genControlObj(espTopic)
+        var control = genControlObj(espTopic, msg.value)
 
         createVirtualDevice(control["device"])
         createControl(control)
@@ -140,7 +140,7 @@ trackMqtt(mqttDevice.baseTopic + "/+/+/+/state", function (msg) {
     }
 });
 
-function genControlObj(espTopic) {
+function genControlObj(espTopic, value) {
     var entityType = mqttDevice.getEntityType(espTopic)
     var controlType = getControlType(entityType)
     var deviceName = mqttDevice.getDeviceName(espTopic)
@@ -151,7 +151,7 @@ function genControlObj(espTopic) {
         "name": topicName,
         "title": topicName,
         "type": controlType,
-        "readonly": !mqttDevice.isAllowWriteTopic(entityType),
+        "readonly": !mqttDevice.isAllowWriteTopic(entityType) && !isJSON(value),
         "default": getDefaultValue(controlType),
         "order": 0,
         "command_topic": "{}/command".format(espTopic),
@@ -301,6 +301,10 @@ function isNumber(value) {
 
 function isString(value) {
     return ((typeof value === "string" || value instanceof String) && (value !== "true" && value !== "false"))
+}
+
+function isJSON(value) {
+    return value[0] != undefined && value[0] == "{"
 }
 
 function convertValue(converterType, value) {
