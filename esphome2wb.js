@@ -4,10 +4,12 @@
 
 mqttDevice = {      //     
     baseTopic: "esphome",
-    allowWriteTopics: ["switch"],
+    allowWriteTopics: ["switch", "state", "brightness"],
     ignoredTopics: ["debug"],
     entityTypes: [
         { esp: "switch", wb: "switch", converter: "ON_OFF" },
+        { esp: "state", wb: "switch", converter: "ON_OFF" },
+        { esp: "brightness", wb: "text" },
         { esp: "text_sensor", wb: "text" },
         { esp: "sensor", wb: "text" },
         { esp: "binary_sensor", wb: "switch", converter: "ON_OFF" },
@@ -20,22 +22,8 @@ mqttDevice = {      //
         });
         return result;
     },
-    getDeviceName: function (topic) {
-        return topic.split('/')[1];
-    },
     getEntityType: function (topic) {
         return topic.split('/')[2];
-    },
-    getTopicName: function (topic) {
-        return topic.split('/')[3];
-    },
-    getTopicPath: function (topic) {
-        return "{}/{}/{}/{}".format(
-            this.baseTopic,
-            this.getTopicDevice(topic),
-            this.getEntityType(topic),
-            this.getTopicName(topic)
-        );
     },
     isAllowWriteTopic: function (entityType) {
         return (this.allowWriteTopics.indexOf(entityType) > -1);
@@ -124,39 +112,65 @@ converterDevice.init();
 
 trackMqtt(mqttDevice.baseTopic + "/+/+/+/state", function (msg) {
     var espTopic = msg.topic
-    var entityType = mqttDevice.getEntityType(espTopic)
+    var parsedData = parseTopicData(espTopic)
 
-    if (!mqttDevice.isIgnoredTopic(entityType)) {
-        espTopic = espTopic.substring(0, espTopic.length - 6)
-        var control = genControlObj(espTopic, msg.value)
+    if (!mqttDevice.isIgnoredTopic(parsedData["entity_type"])) {
+        createVirtualDevice(parsedData["device"])
 
-        createVirtualDevice(control["device"])
-        createControl(control)
+        if (!isJSON(msg.value)) {
+            var control = genControlObj(parsedData, msg.value)
+            createControl(control)
 
-        //var control = session.getControl(msg.topic, "state_topic")
-        var newValue = convertValue(control["converter_type"], msg.value)
+            var newValue = convertValue(parsedData["converter_type"], msg.value)
+            writeWbControlValue(parsedData["device"], parsedData["control_name"], newValue)
+        } else {
+            var controls = JSON.parse(msg.value);
+            for (var key in controls) {
+                var jsonTopic = parsedData["control_name"]
+                var control = genControlObj({
+                    topic: espTopic.substring(0, espTopic.length - 6),
+                    entity_type: key,
+                    control_type: getControlType(key),
+                    device: parsedData["device"],
+                    control_name: "{}_{}".format(jsonTopic, key),
+                    converter_type: mqttDevice.getConverterType(key),
+                    json_topic: jsonTopic
+                },
+                    controls[key])
+                createControl(control)
 
-        writeWbControlValue(control["device"], control["name"], newValue)
+                var newValue = convertValue(control["converter_type"], controls[key])
+                writeWbControlValue(control["device"], control["name"], newValue)
+            }
+        }
     }
 });
 
-function genControlObj(espTopic, value) {
+function parseTopicData(espTopic) {
     var entityType = mqttDevice.getEntityType(espTopic)
-    var controlType = getControlType(entityType)
-    var deviceName = mqttDevice.getDeviceName(espTopic)
-    var topicName = mqttDevice.getTopicName(espTopic)
-
     return {
-        "device": deviceName,
-        "name": topicName,
-        "title": topicName,
-        "type": controlType,
-        "readonly": !mqttDevice.isAllowWriteTopic(entityType) && !isJSON(value),
-        "default": getDefaultValue(controlType),
+        topic: espTopic.substring(0, espTopic.length - 6),
+        entity_type: entityType,
+        control_type: getControlType(entityType),
+        device: espTopic.split('/')[1],
+        control_name: espTopic.split('/')[3],
+        converter_type: mqttDevice.getConverterType(entityType)
+    }
+}
+
+function genControlObj(parsedData, value) {
+    return {
+        "device": parsedData["device"],
+        "name": parsedData["control_name"],
+        "title": parsedData["control_name"],
+        "type": parsedData["control_type"],
+        "readonly": !mqttDevice.isAllowWriteTopic(parsedData["entity_type"]) && !isJSON(value),
+        "default": getDefaultValue(parsedData["control_type"]),
         "order": 0,
-        "command_topic": "{}/command".format(espTopic),
-        "state_topic": "{}/state".format(espTopic),
-        "converter_type": mqttDevice.getConverterType(entityType)
+        "command_topic": "{}/command".format(parsedData["topic"]),
+        "state_topic": "{}/state".format(parsedData["topic"]),
+        "converter_type": parsedData["converter_type"],
+        "json_topic" : parsedData["json_topic"]
     }
 }
 
@@ -182,6 +196,13 @@ function addAction(control) {
             "id"
         )
         var newValue = convertValue(control["converter_type"], msg.value)
+
+        log(control["json_topic"])
+        if (control["json_topic"] != undefined){
+            var paramName = control["name"].replace(control["json_topic"]+"_","")
+            log(paramName)
+            newValue = '{ "{}":"{}" }'.format(paramName, newValue)
+        }
 
         publishValue(control["command_topic"], newValue)
     });
@@ -223,7 +244,7 @@ function createControl(control) {
             "state_topic": control["state_topic"],
             "command_topic": control["command_topic"],
             "device": control["device"],
-            "json": control["json"]
+            "json_topic": control["json_topic"]
         })
 
         // костыли, обходящий багу с тем, что range не работает, если не выставлен max по старому формату
