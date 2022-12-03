@@ -195,7 +195,7 @@ function createVirtualDevice(deviceName) {
 
     if (!session.deviceIsExists(deviceName)) {
         publishValue("/devices/{}/meta/name".format(deviceName), deviceName)
-        publishValue("/devices/{}/meta/driver".format(deviceName), "ha2wb")
+        publishValue("/devices/{}/meta/driver".format(deviceName), "wb-esphome")
 
         updateDevicesCount(
             session.devices.push(deviceName) - 1
@@ -235,6 +235,9 @@ function createControl(control) {
         if (meta["order"] != undefined) {
             publishValue("{}/meta/order".format(topic), meta["order"])
         }
+
+        publishValue("{}/meta/type".format(topic), control["type"])
+        publishValue("{}/meta/readonly".format(topic), control["readonly"])
 
         if (!control["readonly"]) addAction(control)
     }
