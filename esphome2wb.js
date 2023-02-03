@@ -237,7 +237,7 @@ function createControl(control) {
         }
 
         publishValue("{}/meta/type".format(topic), control["type"])
-        publishValue("{}/meta/readonly".format(topic), control["readonly"])
+        publishValue("{}/meta/readonly".format(topic), (control["readonly"])?1:0)
 
         if (!control["readonly"]) addAction(control)
     }
