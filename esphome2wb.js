@@ -1,20 +1,24 @@
+// version 1.1.0
+
 /*-------------------------*/
 /* Description MQTT device */
 /*-------------------------*/
 
-mqttDevice = {      //     
+mqttDevice = {      //
     baseTopic: "esphome",
-    allowWriteTopics: ["switch"],
+    allowWriteTopics: ["switch", "fan", "speed_level"],
     ignoredTopics: ["debug"],
     entityTypes: [
         { esp: "switch", wb: "switch", converter: "ON_OFF" },
+        { esp: "fan", wb: "switch", converter: "ON_OFF" },
         { esp: "text_sensor", wb: "text" },
+        { esp: "speed_level", wb: "range" },
         { esp: "sensor", wb: "text" },
         { esp: "binary_sensor", wb: "switch", converter: "ON_OFF" },
         { esp: "debug", wb: "debug" }
     ],
     getConverterType: function (entityType) {
-        result = null;
+        var result = null;
         this.entityTypes.forEach(function (item) {
             if (item.esp === entityType) result = item.converter;
         });
@@ -23,11 +27,12 @@ mqttDevice = {      //
     getDeviceName: function (topic) {
         return topic.split('/')[1];
     },
-    getEntityType: function (topic) {
-        return topic.split('/')[2];
+    getEntityType: function (topic, child) {
+        return (child) ? topic.split('/')[4] : topic.split('/')[2];
     },
-    getTopicName: function (topic) {
-        return topic.split('/')[3];
+    getTopicName: function (topic, child) {
+        var splited = topic.split('/')
+        return (child) ? splited[3] + "_" + splited[4] : splited[3];
     },
     getTopicPath: function (topic) {
         return "{}/{}/{}/{}".format(
@@ -123,28 +128,39 @@ converterDevice.init();
 /** --------- */
 
 trackMqtt(mqttDevice.baseTopic + "/+/+/+/state", function (msg) {
+    parseMsg(msg)
+});
+
+trackMqtt(mqttDevice.baseTopic + "/+/+/+/+/state", function (msg) {
+    parseMsg(msg, true)
+});
+
+
+function parseMsg(msg, child) {
+
+    child = child || false
+
     var espTopic = msg.topic
-    var entityType = mqttDevice.getEntityType(espTopic)
+    var entityType = mqttDevice.getEntityType(espTopic, child)
 
     if (!mqttDevice.isIgnoredTopic(entityType)) {
         espTopic = espTopic.substring(0, espTopic.length - 6)
-        var control = genControlObj(espTopic, msg.value)
+        var control = genControlObj(espTopic, msg.value, child)
 
         createVirtualDevice(control["device"])
         createControl(control)
 
-        //var control = session.getControl(msg.topic, "state_topic")
         var newValue = convertValue(control["converter_type"], msg.value)
 
         writeWbControlValue(control["device"], control["name"], newValue)
     }
-});
+}
 
-function genControlObj(espTopic, value) {
-    var entityType = mqttDevice.getEntityType(espTopic)
+function genControlObj(espTopic, value, child) {
+    var entityType = mqttDevice.getEntityType(espTopic, child)
     var controlType = getControlType(entityType)
     var deviceName = mqttDevice.getDeviceName(espTopic)
-    var topicName = mqttDevice.getTopicName(espTopic)
+    var topicName = mqttDevice.getTopicName(espTopic, child)
 
     return {
         "device": deviceName,
@@ -156,7 +172,9 @@ function genControlObj(espTopic, value) {
         "order": 0,
         "command_topic": "{}/command".format(espTopic),
         "state_topic": "{}/state".format(espTopic),
-        "converter_type": mqttDevice.getConverterType(entityType)
+        "converter_type": mqttDevice.getConverterType(entityType),
+        "min": (controlType == "range") ? 0 : undefined,
+        "max": (controlType == "range") ? 100 : undefined
     }
 }
 
@@ -237,7 +255,7 @@ function createControl(control) {
         }
 
         publishValue("{}/meta/type".format(topic), control["type"])
-        publishValue("{}/meta/readonly".format(topic), (control["readonly"])?1:0)
+        publishValue("{}/meta/readonly".format(topic), (control["readonly"]) ? 1 : 0)
 
         if (!control["readonly"]) addAction(control)
     }
